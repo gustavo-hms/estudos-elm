@@ -3,11 +3,17 @@ module Markdown where
 import String
 -- import List
 import Html exposing (Html, Attribute, div, text, input)
-import Html.Attributes exposing (placeholder)
-import Html.Events exposing (on, targetValue)
+import Html.Attributes exposing (placeholder, style)
+import Html.Events exposing (on, targetValue, onClick)
 import StartApp
 
-main = StartApp.start { model = modelo, view = exibir, update = atualizar }
+main : Signal Html
+-- main = StartApp.start { model = modelo, view = exibir, update = atualizar }
+main = Signal.foldp atualizar modelo mailbox.signal |> Signal.map (exibir mailbox.address)
+
+
+mailbox = Signal.mailbox <| Filtrar ""
+
 
 -- Modelo
 
@@ -49,7 +55,7 @@ exibir endereço modelo =
             , onInput endereço Filtrar
             ]
             []
-        , div [] <| List.map exibirDocumento modelo
+        , div [] <| List.map (exibirDocumento endereço) modelo
         ]
 
 
@@ -58,9 +64,16 @@ onInput endereço ação =
     on "input" targetValue (\nome -> Signal.message endereço (ação nome))
 
 
-exibirDocumento : Documento -> Html
-exibirDocumento doc =
-    div [] [ text doc.nome ]
+exibirDocumento : Signal.Address Ação -> Documento -> Html
+exibirDocumento endereço doc =
+    div [ onClick endereço (Escolher doc.nome)
+        , if doc.escolhido then docEscolhido else style []
+        ]
+        [ text doc.nome ]
+
+
+docEscolhido : Html.Attribute
+docEscolhido = style [("color", "blue")]
 
 
 -- Atualização
@@ -68,14 +81,22 @@ exibirDocumento doc =
 atualizar : Ação -> List Documento -> List Documento
 atualizar ação documentos =
     case ação of
-        Filtrar nome -> filtrar modelo nome
+        Filtrar nome  -> filtrar nome modelo 
+        Escolher nome -> escolher nome documentos
 
 
-filtrar : List Documento -> String -> List Documento
-filtrar xs nome =
+filtrar : String -> List Documento -> List Documento
+filtrar nome xs =
     if String.isEmpty nome
        then xs
        else List.filter (\x -> String.contains nome x.nome) xs
 
 
-type Ação = Filtrar String
+escolher : String -> List Documento -> List Documento
+escolher nome xs =
+    List.map (\x -> {x | escolhido <- x.nome == nome}) xs
+
+
+type Ação
+    = Filtrar String
+    | Escolher String
